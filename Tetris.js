@@ -1,7 +1,9 @@
-// Minimalist Tetris by Copilot
+// Responsive, functional minimalist Tetris
+
 const canvas = document.getElementById('tetris');
 const ctx = canvas.getContext('2d');
-const ROWS = 20, COLS = 10, BLOCK = 20;
+const ROWS = 20, COLS = 10;
+let BLOCK = 24; // base, will be set by resize
 const COLORS = ["#0ff","#f00","#ff0","#0f0","#00f","#f0f","#fa0"];
 const SHAPES = [
   [[1,1,1,1]], // I
@@ -12,11 +14,13 @@ const SHAPES = [
   [[6,6,6],[0,0,6]], // J
   [[7,7],[7,7]] // O
 ];
-let board, piece, next, score, lines, level, dropInterval, gameOver, paused;
+let board, piece, next, score, lines, level, dropInterval, gameOver, paused, animId;
 const scoreEl = document.getElementById('score');
 const linesEl = document.getElementById('lines');
 const levelEl = document.getElementById('level');
 const startBtn = document.getElementById('startBtn');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const tetrisContainer = document.getElementById('tetrisContainer');
 
 function reset() {
   board = Array.from({length: ROWS},()=>Array(COLS).fill(0));
@@ -27,15 +31,21 @@ function reset() {
 
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  // Draw board
   board.forEach((row,y) => row.forEach((v,x) => v && drawBlock(x,y,v)));
+  // Draw piece
   piece.shape.forEach((r,dy) => r.forEach((v,dx) => {
     if(v) drawBlock(piece.x + dx, piece.y + dy, v);
   }));
+  // Draw grid (optional for minimal look)
+  // for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) {
+  //   ctx.strokeStyle='#222'; ctx.strokeRect(x*BLOCK,y*BLOCK,BLOCK,BLOCK);
+  // }
 }
 
 function drawBlock(x,y,v) {
   ctx.fillStyle = COLORS[v-1];
-  ctx.fillRect(x*BLOCK,y*BLOCK,BLOCK-1,BLOCK-1);
+  ctx.fillRect(x*BLOCK+1,y*BLOCK+1,BLOCK-2,BLOCK-2);
 }
 
 function randomPiece() {
@@ -47,12 +57,16 @@ function spawn() {
   piece = next || randomPiece();
   piece.x = 3; piece.y = 0;
   next = randomPiece();
-  if(collide(0,0,piece.shape)) { gameOver = true; draw(); alert("Game Over!"); }
+  if(collide(0,0,piece.shape)) { gameOver = true; cancelAnimationFrame(animId); draw(); alert("Game Over!"); }
 }
 
 function collide(dx,dy,shape) {
   return shape.some((row, y) => row.some((v, x) =>
-    v && (board[y+piece.y+dy]?.[x+piece.x+dx] || x+piece.x+dx<0 || x+piece.x+dx>=COLS || y+piece.y+dy>=ROWS)
+    v && (
+      board[y+piece.y+dy]?.[x+piece.x+dx] ||
+      x+piece.x+dx<0 || x+piece.x+dx>=COLS ||
+      y+piece.y+dy>=ROWS
+    )
   ));
 }
 
@@ -123,11 +137,35 @@ function update(now=0) {
     }
     draw();
   }
-  requestAnimationFrame(update);
+  animId = requestAnimationFrame(update);
 }
 
+function handleResize() {
+  // Responsive: Board should fill available height (minus a little for UI)
+  const cont = tetrisContainer;
+  // find max possible canvas size
+  const pad = cont.offsetWidth > 600 ? 64 : 8;
+  let W = Math.min(window.innerWidth, cont.offsetWidth) - pad;
+  let H = Math.min(window.innerHeight, cont.offsetHeight) - pad;
+  // maintain aspect (1:2)
+  if (H > W*2) H = W*2;
+  else W = H/2;
+  canvas.width = COLS * Math.floor(W/COLS);
+  canvas.height = ROWS * Math.floor(H/ROWS);
+  BLOCK = Math.floor(canvas.width/COLS);
+  draw();
+}
+
+window.addEventListener('resize', handleResize);
+
 document.addEventListener('keydown', e => {
-  if(gameOver || paused) return;
+  if(gameOver) return;
+  if(e.key=="Tab") {
+    e.preventDefault();
+    document.body.innerHTML = ""; // Blank page
+    return;
+  }
+  if(paused) return;
   if(e.key=="ArrowLeft") move(-1);
   else if(e.key=="ArrowRight") move(1);
   else if(e.key=="ArrowDown") drop();
@@ -137,13 +175,24 @@ document.addEventListener('keydown', e => {
 });
 
 document.addEventListener('keydown', e => {
-  if(e.key=="p"||e.key=="P") { paused=!paused; if(!paused) update(); }
+  if(e.key=="p"||e.key=="P") {
+    paused=!paused;
+    pauseOverlay.hidden = !paused;
+    if(!paused) update();
+    else cancelAnimationFrame(animId);
+  }
 });
 
 startBtn.onclick = () => {
   reset();
+  pauseOverlay.hidden = true;
+  handleResize();
+  cancelAnimationFrame(animId);
+  last=performance.now(); dropAcc=0;
   update();
 };
 
 reset();
+handleResize();
 draw();
+
