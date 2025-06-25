@@ -7,20 +7,23 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="tetris-container">
+  <div class="tetris-container" id="tetrisContainer">
     <h1>Tetris</h1>
-    <canvas id="tetris" width="200" height="400"></canvas>
-    <div class="scoreboard">
-      <div>Score: <span id="score">0</span></div>
-      <div>Lines: <span id="lines">0</span></div>
-      <div>Level: <span id="level">1</span></div>
-    </div>
-    <button id="startBtn">Start</button>
-    <div class="instructions">
-      <small>
-        ← → : Move | ↑ : Rotate | ↓ : Drop<br>
-        Space: Hard Drop | P: Pause
-      </small>
+    <div class="game-area">
+      <canvas id="tetris"></canvas>
+      <div class="scoreboard">
+        <div>Score: <span id="score">0</span></div>
+        <div>Lines: <span id="lines">0</span></div>
+        <div>Level: <span id="level">1</span></div>
+      </div>
+      <button id="startBtn">Start</button>
+      <div class="instructions">
+        <small>
+          ← → : Move | ↑ : Rotate | ↓ : Drop<br>
+          Space: Hard Drop | P: Pause | Tab: Blank
+        </small>
+      </div>
+      <div id="pauseOverlay" class="overlay" hidden>Paused</div>
     </div>
   </div>
   <script src="tetris.js"></script>
