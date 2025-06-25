@@ -6,9 +6,8 @@ body {
   min-height: 100vh;
 }
 #root { min-height: 100vh; display: flex; justify-content: center; align-items: center; }
-.menu, .lobby, .battle-flex { display: flex; flex-direction: column; align-items: center; }
+.menu, .battle-flex { display: flex; flex-direction: column; align-items: center; }
 .menu { gap: 1.2em; }
-.battle-flex { flex-direction: row; flex-wrap: wrap; gap: 2vw; }
 .tetris-container {
   background: #232323;
   border-radius: 1rem;
@@ -42,9 +41,10 @@ canvas { background: #191919; border-radius: 0.5rem; display: block; }
 .instructions {
   color: #aaa; font-size: 0.95em; text-align: center; margin-top: 0.6em;
 }
-.player-label { font-weight: bold; font-size: 1.1em; }
-.you { color: #0ff; }
-.opponent { color: #f55; }
 @media (max-width: 900px) {
   .battle-flex { flex-direction: column; }
+}
+/* Blackout overlay */
+#blackout {
+  display: none;
 }
