@@ -1,4 +1,5 @@
-const ROWS = 20, COLS = 10, COLORS = ["#0ff","#f00","#ff0","#0f0","#00f","#f0f","#fa0"];
+const ROWS = 20, COLS = 10;
+const COLORS = ["#0ff", "#f00", "#ff0", "#0f0", "#00f", "#f0f", "#fa0"];
 const SHAPES = [
   [[1,1,1,1]], [[2,2,2],[0,2,0]], [[3,3,0],[0,3,3]], [[0,4,4],[4,4,0]],
   [[5,5,5],[5,0,0]], [[6,6,6],[0,0,6]], [[7,7],[7,7]]
@@ -21,34 +22,30 @@ function createElement(tag, props, ...children) {
   return elem;
 }
 
-// --- TetrisGame class (unchanged) ---
 class TetrisGame {
-  constructor(canvas, onGameOver, onScore, onLineClear) {
+  constructor(canvas, onGameOver, onScore) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.BLOCK = Math.floor(Math.min(this.canvas.width/COLS, this.canvas.height/ROWS));
+    this.BLOCK = Math.floor(Math.min(this.canvas.width / COLS, this.canvas.height / ROWS));
     this.onGameOver = onGameOver;
     this.onScore = onScore;
-    this.onLineClear = onLineClear;
-    this.init();
+    this._initVars();
   }
-  init() {
+  _initVars() {
     this.board = Array.from({length: ROWS},()=>Array(COLS).fill(0));
     this.score = 0; this.lines = 0; this.level = 1;
-    this.dropInterval = 600; this.gameOver = false;
-    this.paused = false;
-    this.piece = null; this.next = this.randomPiece();
+    this.dropInterval = 600; this.gameOver = false; this.paused = false;
+    this.piece = null; this.next = this._randomPiece();
     this.animId = null;
-    this.garbageQueue = 0;
   }
-  randomPiece() {
+  _randomPiece() {
     let i = Math.floor(Math.random()*SHAPES.length);
     return {shape: SHAPES[i].map(r=>[...r]), x:3, y:0, type:i+1};
   }
   spawn() {
-    this.piece = this.next || this.randomPiece();
+    this.piece = this.next || this._randomPiece();
     this.piece.x = 3; this.piece.y = 0;
-    this.next = this.randomPiece();
+    this.next = this._randomPiece();
     if (this.collide(0,0,this.piece.shape)) {
       this.gameOver = true;
       this.stop();
@@ -71,6 +68,7 @@ class TetrisGame {
     }));
   }
   rotate(mat) {
+    // Rotate clockwise
     return mat[0].map((_,i) => mat.map(r=>r[i]).reverse());
   }
   drop() {
@@ -105,20 +103,20 @@ class TetrisGame {
       this.level = 1 + Math.floor(this.lines/10);
       this.dropInterval = Math.max(100, 600 - this.level*50);
       this.onScore && this.onScore(this.score, this.lines, this.level);
-      if (this.onLineClear) this.onLineClear(count);
     }
     return count;
   }
-  addGarbage(n) {} // Not needed in solo
   updateScore() {
     this.onScore && this.onScore(this.score, this.lines, this.level);
   }
   draw() {
     this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
     this.board.forEach((row,y) => row.forEach((v,x) => v && this.drawBlock(x,y,v)));
-    this.piece && this.piece.shape.forEach((r,dy) => r.forEach((v,dx) => {
-      if(v) this.drawBlock(this.piece.x+dx,this.piece.y+dy,v);
-    }));
+    if (this.piece) {
+      this.piece.shape.forEach((r,dy) => r.forEach((v,dx) => {
+        if(v) this.drawBlock(this.piece.x+dx,this.piece.y+dy,v);
+      }));
+    }
   }
   drawBlock(x,y,v) {
     this.ctx.fillStyle = COLORS[v-1];
@@ -145,20 +143,26 @@ class TetrisGame {
     }
     this.animId = requestAnimationFrame(this.loop.bind(this));
   }
-  togglePause() {
-    this.paused = !this.paused;
+  togglePause(forceState) {
+    // If forceState is a boolean, set pause to that, else toggle
+    if (typeof forceState === "boolean") this.paused = forceState;
+    else this.paused = !this.paused;
+    this.draw();
+    this.updateScore();
   }
   reset() {
-    this.init();
+    this._initVars();
     this.spawn();
     this.draw();
     this.updateScore();
   }
 }
 
-// --- UI for Solo Game ---
+// --- UI and Controls ---
 const root = document.getElementById("root");
 let game = null;
+let blackout = null;
+let tabPaused = false;
 
 function renderSoloMenu() {
   root.innerHTML = "";
@@ -167,10 +171,12 @@ function renderSoloMenu() {
       createElement("h1", null, "Tetris Solo"),
       createElement("button", {className:"btn", onClick: startSoloGame}, "Start Game"),
       createElement("div", {className:"instructions"}, [
-        "← → : Move | ↑ : Rotate | ↓ : Drop | Space: Hard Drop | P: Pause"
+        "← → : Move | ↑ : Rotate | ↓ : Drop | Space: Hard Drop | P: Pause | Tab: Pause & Blackout"
       ])
     ])
   );
+  removeBlackout();
+  document.body.style.overflow = "";
 }
 
 function startSoloGame() {
@@ -189,7 +195,7 @@ function startSoloGame() {
   let canvas = el("#canvas");
   game = new TetrisGame(
     canvas,
-    ()=>showOverlay("overlay","Game Over<br><button class='btn' onclick='window.location.reload()'>Restart</button>"),
+    ()=>showOverlay("overlay",`Game Over<br><button class='btn' id='restartBtn'>Restart</button>`),
     (s,l,v)=>updateScoreboard(s,l,v)
   );
   game.reset();
@@ -197,10 +203,38 @@ function startSoloGame() {
   game.draw();
   game.start();
   el("#overlay").style.display = "none";
-  document.addEventListener('keydown', handleKey);
+  document.addEventListener('keydown', handleKey, {capture: true});
+  setTimeout(()=>{ // Button needs to be ready for event
+    let btn = el("#restartBtn");
+    if (btn) btn.onclick = () => {
+      renderSoloMenu();
+      startSoloGame();
+    };
+  }, 100);
 }
 
 function handleKey(e) {
+  // Pause & blackout on Tab
+  if (e.key === "Tab") {
+    e.preventDefault();
+    if (!tabPaused) {
+      if (game && !game.paused && !game.gameOver) {
+        game.togglePause(true);
+        showOverlay("overlay", "Paused (Tab)");
+      }
+      showBlackout();
+      tabPaused = true;
+    } else {
+      if (game && game.paused && !game.gameOver) {
+        game.togglePause(false);
+        hideOverlay("overlay");
+      }
+      removeBlackout();
+      tabPaused = false;
+    }
+    return;
+  }
+  // Don't process keys if paused, game over, or not playing
   if (!game || game.gameOver || game.paused) return;
   if (e.key==="ArrowLeft") game.move(-1);
   else if (e.key==="ArrowRight") game.move(1);
@@ -236,5 +270,31 @@ function hideOverlay(id) {
   if (o) o.style.display = "none";
 }
 
-// Start
-renderSoloMenu();
+// Blackout overlay for page
+function showBlackout() {
+  if (!blackout) {
+    blackout = document.createElement("div");
+    blackout.id = "blackout";
+    blackout.style.position = "fixed";
+    blackout.style.top = "0";
+    blackout.style.left = "0";
+    blackout.style.width = "100vw";
+    blackout.style.height = "100vh";
+    blackout.style.background = "#000";
+    blackout.style.opacity = "1";
+    blackout.style.zIndex = "99999";
+    blackout.style.pointerEvents = "all";
+    document.body.appendChild(blackout);
+  }
+  blackout.style.display = "block";
+  document.body.style.overflow = "hidden";
+}
+function removeBlackout() {
+  if (blackout) {
+    blackout.style.display = "none";
+  }
+  document.body.style.overflow = "";
+}
+
+window.addEventListener("DOMContentLoaded", renderSoloMenu);
+
